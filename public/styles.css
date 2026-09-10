@@ -573,6 +573,8 @@ footer{padding:26px 22px 38px;border-color:var(--line-soft);font-size:9px}
 .custom-datetime>span{color:var(--muted);font-size:16px;text-align:center}
 .audit-row small{font-size:12px}
 footer{font-size:12px}
+footer a{width:max-content;color:var(--yes);font-weight:700}
+footer a:hover{color:var(--text);text-decoration:underline;text-underline-offset:3px}
 
 @media(max-width:900px){
   .market-layout{display:flex;flex-direction:column}
