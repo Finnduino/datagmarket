@@ -50,11 +50,23 @@ function navigate(path) {
 }
 
 function marketCard(m) {
-  const ranked = [...m.options].sort((a,b)=>b.probability-a.probability);
+  const options = m.options.map((option, index) => ({ ...option, colorIndex: index % 6 }));
+  const ranked = [...options].sort((a,b)=>b.probability-a.probability);
+  const leader = ranked[0] || { label: 'No outcome', probability: 0 };
+  const leaderPercent = clamp(Number(leader.probability || 0) * 100, 0, 100);
+  const distribution = options.map(option => {
+    const percent = clamp(Number(option.probability || 0) * 100, 0, 100);
+    return `<i class="distribution-segment option-fill-${option.colorIndex}" style="width:${percent}%" title="${esc(option.label)}: ${Math.round(percent)}%"></i>`;
+  }).join('');
   return `<a class="market-card" href="/market/${encodeURIComponent(m.slug)}" data-link>
     <div class="card-meta"><span>${esc(m.category)}</span><span>${m.status === 'OPEN' ? relative(m.closesAt) : esc(m.status)}</span></div>
     <h3>${esc(m.question)}</h3>
-    <div class="outcome-mini">${ranked.slice(0,3).map((option,index)=>`<span class="option-color-${index}"><b>${esc(option.label)}</b><strong>${pct(option.probability)}</strong></span>`).join('')}</div>
+    <div class="card-snapshot">
+      <div class="probability-ring option-ring-${leader.colorIndex || 0}" style="--probability:${leaderPercent}" role="img" aria-label="${esc(leader.label)} leads at ${Math.round(leaderPercent)} percent"><strong>${Math.round(leaderPercent)}<small>%</small></strong></div>
+      <div class="card-leader"><span>Current leader</span><strong>${esc(leader.label)}</strong></div>
+    </div>
+    <div class="distribution-bar" aria-label="Current outcome distribution">${distribution}</div>
+    <div class="outcome-mini">${ranked.slice(0,3).map(option=>`<span class="option-color-${option.colorIndex}"><b>${esc(option.label)}</b><strong>${pct(option.probability)}</strong></span>`).join('')}</div>
     <div class="card-bottom"><span>◈ ${money(m.volume)} volume</span></div>
   </a>`;
 }
