@@ -1,6 +1,6 @@
 # Data(g)Market
 
-Play-money prediction markets for Data Guild events.
+Prediction markets for Data Guild events.
 
 ## Run locally
 
@@ -26,8 +26,6 @@ Cloudflare tunnel.
 Set `datamarket.nahi.online` as the bot domain in BotFather. The first Telegram
 account to sign in becomes the founding admin.
 Admins can appoint moderators from `/organizer`; only admins can resolve markets.
-
-All balances are fictional DataCoin (DGC) with no monetary value.
 
 ## Contributing
 
