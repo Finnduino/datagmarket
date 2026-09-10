@@ -612,7 +612,7 @@ async function api(req, res, url) {
       houseEntry("HOUSE_SEED", -b, id, { slug, optionCount: optionSpecs.length }, created);
       db.prepare("INSERT INTO positions(user_id,market_id,outcome,shares,cost_basis) VALUES(?,?,?,?,?)").run(user.id, id, openingOption.id, shares, openingStake);
       db.prepare("INSERT INTO trades(id,user_id,market_id,outcome,action,amount,shares,price_after,created_at) VALUES(?,?,?,?,?,?,?,?,?)").run(randomUUID(), user.id, id, openingOption.id, "BUY", openingStake, shares, afterP, created);
-      recordHistory(id, beforeProbabilities, new Date(Date.now() - 1).toISOString());
+      recordHistory(id, beforeProbabilities, new Date(new Date(created).getTime() - 1).toISOString());
       recordHistory(id, afterProbabilities, created);
       db.prepare("INSERT INTO ledger(id,user_id,kind,amount,market_id,created_at) VALUES(?,?,?,?,?,?)").run(randomUUID(), user.id, "MARKET_OPEN", -openingStake, id, created);
       audit("MARKET_CREATE", {
@@ -726,7 +726,7 @@ async function api(req, res, url) {
       const after = fpmmProbabilities(options);
       db.prepare("INSERT INTO trades(id,user_id,market_id,outcome,action,amount,shares,price_after,created_at) VALUES(?,?,?,?,?,?,?,?,?)").run(randomUUID(), user.id, m.id, id, "BUY", stake, shares, after[id], created);
       db.prepare("UPDATE markets SET volume=volume+?,collateral=collateral+? WHERE id=?").run(stake, stake, m.id);
-      recordHistory(m.id, before, new Date(Date.now()-1).toISOString()); recordHistory(m.id, after, created);
+      recordHistory(m.id, before, new Date(new Date(created).getTime()-1).toISOString()); recordHistory(m.id, after, created);
       db.prepare("INSERT INTO ledger(id,user_id,kind,amount,market_id,created_at) VALUES(?,?,?,?,?,?)").run(randomUUID(), user.id, "OPTION_OPEN", -stake, m.id, created);
       audit("OPTION_ADD", { actorUserId: user.id, marketId: m.id, createdAt: created, details: { optionId: id, label, openingStake: stake, convertedCompleteSets: m.collateral } });
       db.exec("COMMIT");

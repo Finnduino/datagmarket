@@ -10,6 +10,7 @@ let marketRefreshTimer;
 let marketRefreshNow;
 let marketEventSource;
 let marketPushTimer;
+let marketChartInstance;
 
 const esc = (value = '') => String(value).replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
 const money = value => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -143,7 +144,11 @@ function chartWindow(history, options, range) {
     const prior = range === 'ALL' ? null : [...all].reverse().find(point => point.time <= start);
     const visible = all.filter(point => point.time >= start && point.time <= end).map(point=>({ ...point, synthetic:false }));
     const points = [...(prior ? [{ ...prior, time:start, synthetic:true }] : []), ...visible];
-    if (points.length && points.at(-1).time < end) points.push({ ...points.at(-1), time:end, synthetic:true });
+    const currentProbability = Number(option.probability);
+    if (Number.isFinite(currentProbability)) {
+      if (points.length && points.at(-1).time === end) points[points.length - 1] = { ...points.at(-1), probability:currentProbability, synthetic:true };
+      else points.push({ outcome:option.id, probability:currentProbability, time:end, createdAt:new Date(end).toISOString(), synthetic:true });
+    }
     return { option, points };
   });
   return { start, end: Math.max(end, start + 1), series };
@@ -151,63 +156,56 @@ function chartWindow(history, options, range) {
 
 function chart(history, options) {
   if (!history.length) return '<div class="chart-empty">No price history yet.</div>';
-  const width = 800, height = 210, pad = 8;
-  const windowed = chartWindow(history, options, chartRange);
-  const x = time => pad + (time - windowed.start) * (width - pad * 2) / (windowed.end - windowed.start);
-  const leadingId = [...options].sort((a,b)=>b.probability-a.probability)[0]?.id;
-  const lines = windowed.series.map(({ option, points },index) => {
-    const path = points.map(point=>`${x(point.time)},${height-pad-point.probability*(height-pad*2)}`).join(' ');
-    const dots = points.filter(point=>!point.synthetic).map(point=>`<circle class="chart-point option-color-${index%6}" cx="${x(point.time)}" cy="${height-pad-point.probability*(height-pad*2)}" r="3"/>`).join('');
-    return path ? `<polyline class="chart-line option-line-${index%6} ${option.id===leadingId?'leader-line':''}" points="${path}"/>${dots}` : '';
-  }).join('');
   return `<div class="chart-ranges" aria-label="Chart time range">${chartRanges.map(range=>`<button class="${chartRange===range?'active':''}" data-chart-range="${range}" aria-pressed="${chartRange===range}">${range}</button>`).join('')}</div>
-    <div class="chart-canvas"><svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Market price history">
-      ${[.25,.5,.75].map(y=>`<line class="chart-grid" x1="0" x2="${width}" y1="${height-y*height}" y2="${height-y*height}"/>`).join('')}
-      ${lines}<line class="chart-crosshair" x1="0" x2="0" y1="0" y2="${height}" hidden/></svg><div class="chart-tooltip" hidden></div></div>
+    <div class="chart-canvas"><canvas class="chart-svg" aria-label="Market price history" role="img"></canvas></div>
     <div class="chart-legend">${options.map((option,index)=>`<span class="option-color-${index%6}"><i></i>${esc(option.label)} ${pct(option.probability)}</span>`).join('')}</div>`;
 }
 
 function bindChart(history, options) {
   const wrap = document.querySelector('.chart-wrap');
-  const canvas = wrap?.querySelector('.chart-canvas');
-  const svg = wrap?.querySelector('.chart-svg');
-  const tooltip = wrap?.querySelector('.chart-tooltip');
-  const crosshair = wrap?.querySelector('.chart-crosshair');
-  if (!canvas || !svg || !tooltip || !crosshair) return;
+  const canvas = wrap?.querySelector('.chart-svg');
+  if (!canvas || !window.Chart) return;
+  marketChartInstance?.destroy();
   const windowed = chartWindow(history, options, chartRange);
-  const interpolate = (points, time) => {
-    if (!points.length) return null;
-    if (time <= points[0].time) return points[0].probability;
-    for (let index = 1; index < points.length; index += 1) {
-      if (time <= points[index].time) {
-        const before = points[index - 1], after = points[index];
-        const progress = (time - before.time) / Math.max(1, after.time - before.time);
-        return before.probability + (after.probability - before.probability) * progress;
+  const colors = ['#a9c49b','#df8266','#c9ad87','#9fb7cf','#c5a5c8','#d2cb8f'];
+  const leadingId = [...options].sort((a,b)=>b.probability-a.probability)[0]?.id;
+  marketChartInstance = new window.Chart(canvas, {
+    type:'line',
+    data:{ datasets:windowed.series.map(({ option, points }, index) => ({
+      label:option.label,
+      data:points.map(point=>({ x:point.time, y:point.probability*100, synthetic:point.synthetic })),
+      borderColor:colors[index%colors.length],
+      backgroundColor:colors[index%colors.length],
+      borderWidth:option.id===leadingId?3:1.8,
+      pointRadius:context=>context.raw?.synthetic?0:2.5,
+      pointHoverRadius:4,
+      stepped:'after',
+      tension:0
+    })) },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      animation:false,
+      parsing:false,
+      interaction:{ mode:'index', axis:'x', intersect:false },
+      plugins:{
+        legend:{ display:false },
+        tooltip:{
+          mode:'index', intersect:false, position:'nearest', itemSort:(a,b)=>b.parsed.y-a.parsed.y,
+          backgroundColor:'rgba(28,29,27,.97)', borderColor:'#565b51', borderWidth:1,
+          titleColor:'#aeb4a8', bodyColor:'#f4f1e8', padding:11, boxPadding:4, usePointStyle:true,
+          callbacks:{
+            title:items=>new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(items[0]?.parsed.x)),
+            label:item=>`${item.dataset.label}  ${Math.round(item.parsed.y)}%`
+          }
+        }
+      },
+      scales:{
+        x:{ type:'linear', min:windowed.start, max:windowed.end, display:false },
+        y:{ min:0, max:100, border:{display:false}, grid:{color:'rgba(106,112,101,.28)',drawTicks:false}, ticks:{display:false,stepSize:25} }
       }
     }
-    return points.at(-1).probability;
-  };
-  const move = event => {
-    const rect = svg.getBoundingClientRect();
-    const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-    const time = windowed.start + ratio * (windowed.end - windowed.start);
-    const svgX = ratio * 800;
-    crosshair.setAttribute('x1', svgX); crosshair.setAttribute('x2', svgX); crosshair.hidden = false;
-    const when = new Intl.DateTimeFormat(undefined, { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' }).format(new Date(time));
-    const ranked = windowed.series.map(({ option, points },index) => ({ option, index, value:interpolate(points,time) }))
-      .filter(row=>row.value!==null).sort((a,b)=>b.value-a.value);
-    tooltip.innerHTML = `<strong>${when}</strong>${ranked.map(({ option, index, value }) => `<span class="option-color-${index%6}"><i></i>${esc(option.label)} <b>${pct(value)}</b></span>`).join('')}`;
-    tooltip.hidden = false;
-    const canvasRect = canvas.getBoundingClientRect();
-    const left = clamp(event.clientX - canvasRect.left - tooltip.offsetWidth / 2, 8, canvas.clientWidth - tooltip.offsetWidth - 8);
-    const top = clamp(event.clientY - canvasRect.top - tooltip.offsetHeight - 16, 8, canvas.clientHeight - tooltip.offsetHeight - 8);
-    tooltip.style.left = `${left}px`;
-    tooltip.style.top = `${top}px`;
-  };
-  svg.addEventListener('pointermove', move);
-  svg.addEventListener('pointerdown', event => { svg.setPointerCapture?.(event.pointerId); move(event); });
-  svg.addEventListener('pointerleave', () => { tooltip.hidden = true; crosshair.hidden = true; });
-  svg.addEventListener('pointerup', event => { svg.releasePointerCapture?.(event.pointerId); });
+  });
 }
 
 function marketChartMarkup(market, history) {
