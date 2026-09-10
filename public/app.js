@@ -8,6 +8,8 @@ let tradeState = { action: 'BUY', outcome: 'YES' };
 let chartRange = '5M';
 let marketRefreshTimer;
 let marketRefreshNow;
+let marketEventSource;
+let marketPushTimer;
 
 const esc = (value = '') => String(value).replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
 const money = value => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -207,6 +209,9 @@ function bindMarketChart(slug, history, options) {
 
 async function marketPage(slug) {
   clearInterval(marketRefreshTimer);
+  clearTimeout(marketPushTimer);
+  marketEventSource?.close();
+  marketEventSource=null;
   marketRefreshNow=null;
   const { market, history, trades } = await api(`/api/markets/${encodeURIComponent(slug)}`);
   if (!market.options.some(option=>option.id===tradeState.outcome)) tradeState.outcome = market.options[0]?.id;
@@ -243,7 +248,15 @@ async function marketPage(slug) {
       bindMarketChart(slug,fresh.history,fresh.market.options);
     } catch (_) {}
   };
-  marketRefreshTimer=setInterval(marketRefreshNow,3000);
+  marketRefreshTimer=setInterval(marketRefreshNow,30000);
+  marketEventSource=new EventSource(`/api/markets/${encodeURIComponent(slug)}/stream`);
+  marketEventSource.addEventListener('market',event=>{
+    let update={}; try{update=JSON.parse(event.data)}catch{}
+    if(update.type==='deleted'){navigate('/');return}
+    if(update.type==='option'||update.type==='resolved'){marketPage(slug);return}
+    clearTimeout(marketPushTimer);
+    marketPushTimer=setTimeout(()=>marketRefreshNow?.(),40);
+  });
   document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{tradeState.action=b.dataset.action;marketPage(slug)}));
   document.querySelectorAll('[data-outcome]').forEach(b=>b.addEventListener('click',()=>{tradeState.outcome=b.dataset.outcome;marketPage(slug)}));
   const tradeAmount=document.querySelector('#trade-amount');
@@ -321,6 +334,9 @@ async function organizer() {
 
 async function route() {
   clearInterval(marketRefreshTimer);
+  clearTimeout(marketPushTimer);
+  marketEventSource?.close();
+  marketEventSource=null;
   marketRefreshNow=null;
   window.scrollTo(0,0); app.innerHTML='<div class="loading-page"><span></span></div>';
   const path = decodeURIComponent(location.pathname);
