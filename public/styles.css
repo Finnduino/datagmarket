@@ -624,7 +624,7 @@ footer{font-size:12px}
 }
 .chart-ranges button:hover{background:var(--surface-2);color:var(--text)}
 .chart-ranges button.active{background:var(--surface-3);color:var(--text);box-shadow:inset 0 0 0 1px var(--line-soft)}
-.chart-canvas{position:relative}
+.chart-canvas{position:relative;height:235px}
 .chart-svg{display:block;cursor:crosshair;touch-action:none}
 .chart-crosshair{stroke:rgba(255,255,255,.52);stroke-width:1;stroke-dasharray:3 4;vector-effect:non-scaling-stroke}
 .chart-tooltip{
@@ -648,6 +648,7 @@ footer{font-size:12px}
 .chart-tooltip span b{font-variant-numeric:tabular-nums}
 
 @media(max-width:600px){
+  .chart-canvas{height:205px}
   .chart-ranges{justify-content:space-between;margin-top:5px}
   .chart-ranges button{min-width:0;flex:1;padding:6px 3px;font-size:10px}
   .chart-tooltip{min-width:145px;padding:9px 10px}
