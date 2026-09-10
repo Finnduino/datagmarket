@@ -535,21 +535,23 @@ footer{padding:26px 22px 38px;border-color:var(--line-soft);font-size:9px}
 .market-card{min-height:218px}
 .market-card h3{margin-bottom:18px}
 .card-snapshot{display:flex;align-items:center;gap:14px;margin-top:auto}
-.probability-ring{--ring-color:var(--yes);position:relative;display:grid;flex:0 0 72px;width:72px;aspect-ratio:1;place-items:center;border-radius:50%;background:conic-gradient(var(--ring-color) calc(var(--probability) * 1%),var(--surface-3) 0);box-shadow:inset 0 0 0 1px rgba(255,255,255,.035)}
-.probability-ring:before{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--surface);box-shadow:0 0 0 1px var(--line-soft)}
+.probability-ring{--ring-color:var(--yes);position:relative;display:grid;flex:0 0 72px;width:72px;aspect-ratio:1;place-items:center}
+.probability-ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.ring-track,.ring-value{fill:none;stroke-width:4}
+.ring-track{stroke:var(--surface-3)}
+.ring-value{stroke:var(--ring-color);stroke-linecap:round}
 .probability-ring strong{position:relative;z-index:1;font:750 22px/1 var(--sans);letter-spacing:-.045em;color:var(--text);font-variant-numeric:tabular-nums}
 .probability-ring small{font-size:12px;font-weight:700;color:var(--muted)}
 .card-leader{display:grid;gap:4px;min-width:0}
 .card-leader span{font-size:11px;font-weight:650;color:var(--muted)}
 .card-leader strong{overflow:hidden;font:750 20px/1.15 var(--sans);letter-spacing:-.025em;text-overflow:ellipsis;white-space:nowrap}
-.distribution-bar{display:flex;width:100%;height:6px;margin:14px 0 10px;overflow:hidden;border-radius:999px;background:var(--surface-3);box-shadow:0 0 0 1px rgba(255,255,255,.035)}
-.distribution-segment{display:block;height:100%;transition:width .24s ease}
-.option-fill-0{background:var(--yes)}
-.option-fill-1{background:var(--no)}
-.option-fill-2{background:#d8c27c}
-.option-fill-3{background:#8baac7}
-.option-fill-4{background:#b396c6}
-.option-fill-5{background:#ca9c7d}
+.distribution-bar{display:block;width:100%;height:6px;margin:14px 0 10px;overflow:hidden;border-radius:999px;background:var(--surface-3);box-shadow:0 0 0 1px rgba(255,255,255,.035)}
+.option-fill-0{fill:var(--yes)}
+.option-fill-1{fill:var(--no)}
+.option-fill-2{fill:#d8c27c}
+.option-fill-3{fill:#8baac7}
+.option-fill-4{fill:#b396c6}
+.option-fill-5{fill:#ca9c7d}
 .option-ring-1{--ring-color:var(--no)}
 .option-ring-2{--ring-color:#d8c27c}
 .option-ring-3{--ring-color:#8baac7}
