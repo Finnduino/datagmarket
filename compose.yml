@@ -1,0 +1,15 @@
+services:
+  web:
+    build: .
+    container_name: dg-markets
+    restart: unless-stopped
+    environment:
+      PORT: "8791"
+      DATABASE_PATH: /app/data/markets.db
+      STARTING_BALANCE: "1000"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data
+    ports:
+      - "127.0.0.1:8791:8791"
+      - "192.168.50.122:8791:8791"

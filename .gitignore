@@ -1,0 +1,10 @@
+data/*
+!data/.gitkeep
+.env
+.env.*
+!.env.example
+node_modules/
+*.log
+.DS_Store
+.idea/
+.vscode/

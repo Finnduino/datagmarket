@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111210">
+  <meta name="description" content="Data Guild's play-money prediction market.">
+  <title>Data(g)Market — Data Guild</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/favicon.png">
+  <link rel="stylesheet" href="/styles.css?v=18">
+</head>
+<body>
+  <div class="noise"></div>
+  <header class="site-header">
+    <a class="brand" href="/" data-link aria-label="Data(g)Market home">
+      <img class="brand-logo" src="/datamarket-logo.svg?v=2" alt="Data(g)Market">
+    </a>
+    <nav class="desktop-nav" aria-label="Primary navigation">
+      <a href="/" data-link>Markets</a>
+      <a href="/trending" data-link>Trending</a>
+      <a href="/search" data-link>Search</a>
+      <a href="/leaderboard" data-link>Leaderboard</a>
+    </nav>
+    <div class="header-actions" id="account-actions"></div>
+  </header>
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <a href="/" data-link><span>⌂</span>Markets</a>
+    <a href="/trending" data-link><span>↗</span>Trending</a>
+    <button data-create><span>＋</span>Create</button>
+    <a href="/search" data-link><span>⌕</span>Search</a>
+    <a href="/leaderboard" data-link><span>♜</span>Leaders</a>
+  </nav>
+  <main id="app" tabindex="-1"><div class="loading-page"><span></span></div></main>
+  <footer>
+    <div><strong>DATA(G)MARKET</strong></div>
+    <p>Zero-value play money. All imaginary losses fund the Evil Dictator Retirement Fund.</p>
+  </footer>
+
+  <dialog id="login-dialog" class="modal">
+    <form method="dialog">
+      <button class="close" type="button" data-close-dialog aria-label="Close">×</button>
+      <h2>Join the market.</h2>
+      <div class="telegram-widget"><script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="dgcoin_gamble_bot" data-size="large" data-radius="4" data-auth-url="https://datamarket.nahi.online/api/auth/telegram/callback"></script></div>
+    </form>
+  </dialog>
+
+  <dialog id="profile-dialog" class="modal">
+    <form method="dialog" id="profile-form">
+      <button class="close" type="button" data-close-dialog aria-label="Close">×</button>
+      <h2>Make it yours.</h2>
+      <div class="avatar-editor"><img id="avatar-preview" alt="Profile picture preview"><div><label class="file-button">Choose picture<input id="avatar-file" type="file" accept="image/png,image/jpeg,image/webp"></label><button class="text-button" id="reset-avatar" type="button">Use pixel avatar</button></div></div>
+      <label>Username<input id="profile-username" name="username" minlength="3" maxlength="24" autocomplete="nickname" required></label>
+      <p class="form-error" data-error></p>
+      <button class="primary wide" type="submit">Save profile <span>→</span></button>
+    </form>
+  </dialog>
+
+  <dialog id="create-dialog" class="modal modal-wide">
+    <form method="dialog" id="create-form">
+      <button class="close" type="button" data-close-dialog aria-label="Close">×</button>
+      <h2>Create a market.</h2>
+      <div class="form-grid">
+        <label class="span-2">Question<input name="question" maxlength="160" placeholder="Will something objectively verifiable happen?" required></label>
+        <label>Category<select name="category"><option>Guild events</option><option>Guild lore</option><option>Otaniemi</option><option>Sports</option><option>Miscellaneous</option></select></label>
+        <label>Closes at<div class="custom-datetime" role="group" aria-label="Market closing date and time"><select id="close-month" aria-label="Month"></select><select id="close-day" aria-label="Day"></select><select id="close-year" aria-label="Year"></select><select id="close-hour" aria-label="Hour"></select><span>:</span><select id="close-minute" aria-label="Minute"></select></div><input name="closesAt" id="closes-at" type="hidden" required></label>
+        <label class="span-2">Market format<select name="marketType" id="market-type"><option value="BINARY">Yes / No</option><option value="MULTIPLE">Multiple choice</option></select></label>
+        <label class="span-2">Resolution rules<textarea name="description" minlength="20" maxlength="1200" rows="4" placeholder="State exactly how the winning outcome will be determined…" required></textarea></label>
+        <fieldset class="span-2 opening-stake" id="binary-opening"><legend>Opening position · 100 DGC</legend><div><label><input type="radio" name="openingOutcome" value="YES" required><span>Commit to YES</span></label><label><input type="radio" name="openingOutcome" value="NO" required><span>Commit to NO</span></label></div></fieldset>
+        <fieldset class="span-2 opening-stake multi-opening" id="multiple-opening" hidden><legend>Initial choices · 100 DGC opening position</legend><textarea id="market-options" rows="5" aria-label="Starting choices, one per line" placeholder="2–10 choices, one per line" disabled></textarea><div class="multi-option-picks" id="multi-option-picks"></div></fieldset>
+      </div>
+      <p class="form-error" data-error></p>
+      <div class="modal-footer"><button class="primary" type="submit">Open for 100 DGC <span>→</span></button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js?v=19"></script>
+</body>
+</html>

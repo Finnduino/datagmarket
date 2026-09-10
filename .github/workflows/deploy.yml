@@ -1,0 +1,47 @@
+name: Check and deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: datamarket-production
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm run check
+
+  deploy:
+    name: Deploy production
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: [self-hosted, Linux, X64, datamarket]
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and restart Data(g)Market
+        env:
+          DATA_DIR: /home/nahiserver/projects/dg-markets/data
+        run: docker compose --project-name dg-markets --env-file /home/nahiserver/projects/dg-markets/.env up -d --build
+      - name: Verify deployment
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            curl --fail --silent --show-error http://127.0.0.1:8791/api/health && exit 0
+            sleep 2
+          done
+          docker compose --project-name dg-markets logs --tail=100
+          exit 1
