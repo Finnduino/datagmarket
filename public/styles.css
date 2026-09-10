@@ -306,6 +306,9 @@ main{min-height:calc(100vh - 180px)}
 .chart-header span{font-family:var(--sans);font-weight:600}
 .chart-grid{stroke:rgba(106,112,101,.4);stroke-dasharray:2 6}
 .chart-line{stroke-width:2.4}
+.chart-line:not(.leader-line){opacity:.72}
+.chart-line.leader-line{stroke-width:3.2}
+.chart-point{fill:currentColor;stroke:var(--surface);stroke-width:1.5;vector-effect:non-scaling-stroke;pointer-events:none}
 .chart-legend{border-color:var(--line-soft);font-family:var(--sans);font-weight:650}
 .multi-chart{height:376px}
 
@@ -583,7 +586,7 @@ footer{font-size:12px}
   margin:7px 0 3px;
 }
 .chart-ranges button{
-  min-width:37px;
+  min-width:40px;
   padding:5px 8px;
   border:0;
   border-radius:5px;

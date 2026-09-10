@@ -5,8 +5,9 @@ const createDialog = document.querySelector('#create-dialog');
 const profileDialog = document.querySelector('#profile-dialog');
 let me = null;
 let tradeState = { action: 'BUY', outcome: 'YES' };
-let chartRange = 'ALL';
+let chartRange = '5M';
 let marketRefreshTimer;
+let marketRefreshNow;
 
 const esc = (value = '') => String(value).replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
 const money = value => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -112,8 +113,8 @@ async function searchPage() {
   input.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(run, 180); });
 }
 
-const chartDurations = { '1H': 3600000, '6H': 6 * 3600000, '1D': 86400000, '1W': 7 * 86400000, '1M': 30 * 86400000 };
-const chartRanges = ['1H', '6H', '1D', '1W', '1M', 'ALL'];
+const chartDurations = { '5M': 5 * 60000, '15M': 15 * 60000, '1H': 3600000, '1D': 86400000, '1W': 7 * 86400000, 'ALL': Infinity };
+const chartRanges = ['5M', '15M', '1H', '1D', '1W', 'ALL'];
 
 function chartWindow(history, options, range) {
   const end = Date.now();
@@ -122,10 +123,10 @@ function chartWindow(history, options, range) {
   const start = range === 'ALL' ? earliest : end - chartDurations[range];
   const series = options.map(option => {
     const all = history.filter(point => point.outcome === option.id).map(point => ({ ...point, time: new Date(point.createdAt).getTime() })).filter(point => Number.isFinite(point.time)).sort((a,b)=>a.time-b.time);
-    const prior = [...all].reverse().find(point => point.time <= start);
-    const visible = all.filter(point => point.time > start && point.time <= end);
-    const points = [...(prior ? [{ ...prior, time: start }] : []), ...visible];
-    if (points.length && points.at(-1).time < end) points.push({ ...points.at(-1), time: end });
+    const prior = range === 'ALL' ? null : [...all].reverse().find(point => point.time <= start);
+    const visible = all.filter(point => point.time >= start && point.time <= end).map(point=>({ ...point, synthetic:false }));
+    const points = [...(prior ? [{ ...prior, time:start, synthetic:true }] : []), ...visible];
+    if (points.length && points.at(-1).time < end) points.push({ ...points.at(-1), time:end, synthetic:true });
     return { option, points };
   });
   return { start, end: Math.max(end, start + 1), series };
@@ -136,9 +137,11 @@ function chart(history, options) {
   const width = 800, height = 210, pad = 8;
   const windowed = chartWindow(history, options, chartRange);
   const x = time => pad + (time - windowed.start) * (width - pad * 2) / (windowed.end - windowed.start);
-  const lines = windowed.series.map(({ points },index) => {
+  const leadingId = [...options].sort((a,b)=>b.probability-a.probability)[0]?.id;
+  const lines = windowed.series.map(({ option, points },index) => {
     const path = points.map(point=>`${x(point.time)},${height-pad-point.probability*(height-pad*2)}`).join(' ');
-    return path ? `<polyline class="chart-line option-line-${index%6}" points="${path}"/>` : '';
+    const dots = points.filter(point=>!point.synthetic).map(point=>`<circle class="chart-point option-color-${index%6}" cx="${x(point.time)}" cy="${height-pad-point.probability*(height-pad*2)}" r="3"/>`).join('');
+    return path ? `<polyline class="chart-line option-line-${index%6} ${option.id===leadingId?'leader-line':''}" points="${path}"/>${dots}` : '';
   }).join('');
   return `<div class="chart-ranges" aria-label="Chart time range">${chartRanges.map(range=>`<button class="${chartRange===range?'active':''}" data-chart-range="${range}" aria-pressed="${chartRange===range}">${range}</button>`).join('')}</div>
     <div class="chart-canvas"><svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Market price history">
@@ -204,6 +207,7 @@ function bindMarketChart(slug, history, options) {
 
 async function marketPage(slug) {
   clearInterval(marketRefreshTimer);
+  marketRefreshNow=null;
   const { market, history, trades } = await api(`/api/markets/${encodeURIComponent(slug)}`);
   if (!market.options.some(option=>option.id===tradeState.outcome)) tradeState.outcome = market.options[0]?.id;
   const selected = market.options.find(option=>option.id===tradeState.outcome) || market.options[0];
@@ -229,7 +233,7 @@ async function marketPage(slug) {
       ${market.marketType==='MULTIPLE'?`<form class="add-option" id="add-option-form"><div><input maxlength="50" required placeholder="Add an outcome"><button class="secondary">Add for 100 DGC</button></div></form>`:''}
     </div>` : `<div class="resolved-banner">${market.status === 'RESOLVED' ? `RESOLVED ${esc(resolvedOption?.label || market.resolution)}${market.oracleLabel ? ` BY ${esc(market.oracleLabel).toUpperCase()}` : ''}` : 'TRADING CLOSED'}</div>`}</aside></div></div>`;
   bindMarketChart(slug,history,market.options);
-  marketRefreshTimer=setInterval(async()=>{
+  marketRefreshNow=async()=>{
     if(document.hidden || decodeURIComponent(location.pathname)!==`/market/${slug}`) return;
     try {
       const fresh=await api(`/api/markets/${encodeURIComponent(slug)}`);
@@ -238,7 +242,8 @@ async function marketPage(slug) {
       wrap.innerHTML=marketChartMarkup(fresh.market,fresh.history);
       bindMarketChart(slug,fresh.history,fresh.market.options);
     } catch (_) {}
-  },5000);
+  };
+  marketRefreshTimer=setInterval(marketRefreshNow,3000);
   document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{tradeState.action=b.dataset.action;marketPage(slug)}));
   document.querySelectorAll('[data-outcome]').forEach(b=>b.addEventListener('click',()=>{tradeState.outcome=b.dataset.outcome;marketPage(slug)}));
   const tradeAmount=document.querySelector('#trade-amount');
@@ -316,6 +321,7 @@ async function organizer() {
 
 async function route() {
   clearInterval(marketRefreshTimer);
+  marketRefreshNow=null;
   window.scrollTo(0,0); app.innerHTML='<div class="loading-page"><span></span></div>';
   const path = decodeURIComponent(location.pathname);
   try {
@@ -356,6 +362,8 @@ document.addEventListener('click', event => {
   if (event.target.closest('[data-logout]')) api('/api/logout',{method:'POST'}).then(()=>{me=null;updateAccount();navigate('/')});
 });
 window.addEventListener('popstate', route);
+window.addEventListener('focus',()=>marketRefreshNow?.());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)marketRefreshNow?.()});
 
 let pendingAvatarData;
 
