@@ -12,6 +12,7 @@ const port = Number(process.env.PORT || 8791);
 const startingBalance = Number(process.env.STARTING_BALANCE || 1000);
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || "";
 const trueResolvers = ["mysterious spirit", "goondalfus", "tweakus", "ben", "paladingaming66969"];
+const marketSubscribers = new Map();
 mkdirSync(join(root, "data"), { recursive: true });
 
 const db = new DatabaseSync(dbPath);
@@ -349,6 +350,16 @@ function json(res, status, payload, headers = {}) {
   res.end(body);
 }
 
+function notifyMarket(marketId, type = "update") {
+  const subscribers = marketSubscribers.get(marketId);
+  if (!subscribers) return;
+  const message = `event: market\ndata: ${JSON.stringify({ type, at:now() })}\n\n`;
+  for (const response of subscribers) {
+    try { response.write(message); } catch { subscribers.delete(response); }
+  }
+  if (!subscribers.size) marketSubscribers.delete(marketId);
+}
+
 async function body(req) {
   let raw = "";
   for await (const chunk of req) {
@@ -491,6 +502,27 @@ async function api(req, res, url) {
     if (status === "resolved") rows = rows.filter((m) => m.status === "RESOLVED");
     const stats = db.prepare("SELECT COUNT(*) trades, COALESCE(SUM(amount),0) volume FROM trades").get();
     return json(res, 200, { markets: rows.map((m) => ({ ...marketView(m, user?.id), recentTrades: m.recent_trades || 0 })), categories: ["All", ...new Set(rows.map((m) => m.category))], stats: { markets: rows.length, trades: stats.trades, volume: round(stats.volume, 2) } });
+  }
+  const streamMatch = url.pathname.match(/^\/api\/markets\/([^/]+)\/stream$/);
+  if (req.method === "GET" && streamMatch) {
+    const market = db.prepare("SELECT id FROM markets WHERE slug=?").get(decodeURIComponent(streamMatch[1]));
+    if (!market) return json(res, 404, { error: "Market not found." });
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.flushHeaders?.();
+    res.write(`retry: 2000\nevent: ready\ndata: ${JSON.stringify({ at:now() })}\n\n`);
+    const subscribers = marketSubscribers.get(market.id) || new Set();
+    subscribers.add(res); marketSubscribers.set(market.id, subscribers);
+    const heartbeat = setInterval(() => { try { res.write(": keepalive\n\n"); } catch {} }, 15000);
+    req.on("close", () => {
+      clearInterval(heartbeat); subscribers.delete(res);
+      if (!subscribers.size) marketSubscribers.delete(market.id);
+    });
+    return;
   }
   if (req.method === "GET" && url.pathname === "/api/leaderboard") {
     const users = db.prepare("SELECT id,username,balance,avatar_data FROM users WHERE telegram_id IS NOT NULL").all().map((user) => {
@@ -639,6 +671,7 @@ async function api(req, res, url) {
       db.prepare("DELETE FROM market_options WHERE market_id=?").run(m.id);
       db.prepare("DELETE FROM markets WHERE id=?").run(m.id);
       db.exec("COMMIT");
+      notifyMarket(m.id, "deleted");
       return json(res, 200, { ok: true, refundedUsers, refundedAmount });
     } catch (error) {
       db.exec("ROLLBACK");
@@ -697,6 +730,7 @@ async function api(req, res, url) {
       db.prepare("INSERT INTO ledger(id,user_id,kind,amount,market_id,created_at) VALUES(?,?,?,?,?,?)").run(randomUUID(), user.id, "OPTION_OPEN", -stake, m.id, created);
       audit("OPTION_ADD", { actorUserId: user.id, marketId: m.id, createdAt: created, details: { optionId: id, label, openingStake: stake, convertedCompleteSets: m.collateral } });
       db.exec("COMMIT");
+      notifyMarket(m.id, "option");
       return json(res, 201, { market: marketView(db.prepare("SELECT * FROM markets WHERE id=?").get(m.id), user.id), user: safeUser(db.prepare("SELECT * FROM users WHERE id=?").get(user.id)), option: { id, label } });
     } catch (error) {
       db.exec("ROLLBACK");
@@ -759,6 +793,7 @@ async function api(req, res, url) {
       recordHistory(m.id, afterProbabilities, created);
       db.prepare("INSERT INTO ledger(id,user_id,kind,amount,market_id,created_at) VALUES(?,?,?,?,?,?)").run(randomUUID(), user.id, action, action === "BUY" ? -cash : cash, m.id, created);
       db.exec("COMMIT");
+      notifyMarket(m.id, "trade");
       const updated = db.prepare("SELECT * FROM markets WHERE id=?").get(m.id);
       const updatedUser = db.prepare("SELECT * FROM users WHERE id=?").get(user.id);
       return json(res, 201, { market: marketView(updated, user.id), user: safeUser(updatedUser), trade: { action, outcome, outcomeLabel: selected.label, amount: round(cash, 2), shares: round(shares, 3) } });
@@ -801,6 +836,7 @@ async function api(req, res, url) {
         details: { resolution, trueResolver, winnerCount: winners.length, totalPayout: round(totalPayout, 4), houseSettlement: houseSettlement === null ? null : round(houseSettlement, 4) },
       });
       db.exec("COMMIT");
+      notifyMarket(m.id, "resolved");
       return json(res, 200, { market: marketView(db.prepare("SELECT * FROM markets WHERE id=?").get(m.id)) });
     } catch (error) { db.exec("ROLLBACK"); return json(res, 400, { error: error.message }); }
   }
