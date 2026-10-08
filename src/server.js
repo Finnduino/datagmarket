@@ -4,6 +4,7 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
+import { createWallet } from './wallet.js';
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const publicDir = join(root, "public");
@@ -416,7 +417,10 @@ function verifyTelegramLogin(url) {
   return Object.fromEntries(fields);
 }
 
+const walletApi = createWallet({db,json,body,requireUser,audit,houseEntry});
+
 async function api(req, res, url) {
+  if (await walletApi(req,res,url)) return;
   if (req.method === "GET" && url.pathname === "/api/health") {
     return json(res, 200, { ok: true, service: "dg-markets", time: now() });
   }
