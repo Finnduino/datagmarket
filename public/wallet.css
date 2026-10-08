@@ -1,4 +1,9 @@
 .wallet-page{max-width:1120px}
+.developer-endpoints{display:grid;gap:12px;margin:24px 0;font-size:13px;overflow-wrap:anywhere}
+.wallet-panel pre{overflow:auto;background:var(--bg);padding:16px;border-radius:8px;font-size:12px;line-height:1.7}
+.developer-access{margin-top:24px}.developer-access form{max-width:520px}.developer-access select{background:var(--bg);color:var(--text);padding:12px;border:1px solid var(--line);border-radius:8px}
+.developer-access .token-scope{display:flex;align-items:center;gap:12px}.developer-access .token-scope input{width:18px;height:18px;flex:0 0 18px;padding:0;margin:0;accent-color:var(--yes)}
+#new-token{border:1px solid var(--yes);padding:20px;border-radius:10px;margin:24px 0}#new-token button{margin:12px 8px 0 0}.token-secret{font-family:var(--mono)!important}
 #app:focus{outline:none}
 .brand-logo{width:100%}
 .wallet-page .discovery-head{padding-bottom:24px}

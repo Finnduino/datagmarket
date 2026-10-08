@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {randomUUID} from 'node:crypto';
 
-test('wallet and event accounting, permissions and replay safety',async t=>{
+test('wallet/event accounting and external REST/MCP authentication isolation',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'dgc-wallet-test-'));
   const path=join(dir,'test.sqlite'),port=18793;
   const server=spawn(process.execPath,['src/server.js'],{env:{...process.env,DATABASE_PATH:path,PORT:String(port),TELEGRAM_BOT_TOKEN:''},stdio:'pipe'});
@@ -80,4 +80,59 @@ test('wallet and event accounting, permissions and replay safety',async t=>{
   assert.equal(db.prepare('SELECT COUNT(*) n FROM event_claims').get().n,4);
   assert.equal(db.prepare("SELECT COUNT(*) n FROM audit_log WHERE event_type='WALLET_TRANSFER'").get().n,3);
   assert.equal(db.prepare("SELECT SUM(amount) n FROM ledger").get().n+db.prepare('SELECT SUM(amount) n FROM house_ledger').get().n,0);
+  // External REST/MCP must never inherit browser sessions or confer write access.
+  db.prepare('UPDATE users SET telegram_id=? WHERE id=?').run('test-telegram-alice','alice');
+  const seeded=await call('alice','/api/markets',{question:'Will the API tests pass?',description:'Resolves yes when the isolated integration tests pass.',closesAt:new Date(Date.now()+86400000).toISOString(),openingOutcome:'YES'});
+  assert.equal(seeded.status,201);
+  const external=async(path,{token,method='GET',body,headers={}}={})=>{
+    const r=await fetch('http://127.0.0.1:'+port+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...headers},body:body===undefined?undefined:JSON.stringify(body)});
+    return {status:r.status,data:r.status===202||r.status===204?null:await r.json()};
+  };
+  assert.equal((await external('/api/v1/stats')).status,200);
+  assert.equal((await external('/api/v1/openapi.json')).data.openapi,'3.1.0');
+  const listed=await external('/api/v1/markets?limit=1',{headers:{cookie:'dg_session=test-alice'}});
+  assert.equal(listed.data.markets.items.length,1);assert.deepEqual(listed.data.markets.items[0].positions,{});
+  const slug=listed.data.markets.items[0].slug;
+  assert.equal((await external('/api/v1/markets/'+slug)).data.market.question,'Will the API tests pass?');
+  const chart=await external('/api/v1/markets/'+slug+'/history?limit=1&offset=1');
+  assert.equal(chart.data.history.items.length,1);assert.equal(chart.data.history.offset,1);
+  assert.equal((await external('/api/v1/markets/missing')).status,404);
+  assert.equal((await external('/api/v1/profiles/alice')).data.user.username,'alice');
+  assert.equal((await external('/api/v1/leaderboard')).data.users.length,1);
+  assert.equal((await external('/api/v1/me',{headers:{cookie:'dg_session=test-alice'}})).status,401);
+  assert.equal((await external('/api/v1/markets?limit=101')).status,400);
+  assert.equal((await external('/api/v1/markets?sort=evil')).status,400);
+  assert.equal((await external('/api/v1/me',{token:'garbage'})).status,401);
+  assert.equal((await call('unknown','/api/developer/tokens',{name:'client',scopes:['account:read'],days:30})).status,401);
+  assert.equal((await call('alice','/api/developer/tokens',{name:'client',scopes:['admin'],days:30})).status,400);
+  const issued=await call('alice','/api/developer/tokens',{name:'test client',scopes:['account:read'],days:7});
+  assert.equal(issued.status,201);assert.ok(issued.token.startsWith('dgc_'));
+  assert.equal((await external('/api/v1/me',{token:issued.token})).data.user.id,'alice');
+  assert.equal((await external('/api/v1/me?user=bob',{token:issued.token})).status,400);
+  assert.equal((await external('/api/v1/me/wallet',{token:issued.token})).status,403);
+  assert.equal((await external('/api/v1/markets',{token:issued.token,method:'POST',body:{}})).status,405);
+  assert.equal((await external('/api/wallet/send',{token:issued.token,method:'POST',body:{recipientId:'bob',amount:1,requestKey:randomUUID()}})).status,401);
+  const tokenList=await call('alice','/api/developer/tokens');assert.ok(!JSON.stringify(tokenList).includes(issued.token));
+  const stored=db.prepare('SELECT token_hash FROM api_tokens WHERE id=?').get(issued.id);assert.notEqual(stored.token_hash,issued.token);
+  const mcp=async(method,args={},token,headers={})=>external('/mcp',{token,method:'POST',headers:{Accept:'application/json, text/event-stream',...headers},body:{jsonrpc:'2.0',id:1,method,params:args}});
+  assert.equal((await mcp('initialize',{protocolVersion:'2025-06-18',clientInfo:{name:'test',version:'1'},capabilities:{}})).data.result.protocolVersion,'2025-06-18');
+  assert.equal((await mcp('tools/list')).data.result.tools.length,6);
+  assert.equal((await mcp('tools/list',{},issued.token)).data.result.tools.length,7);
+  assert.equal((await mcp('tools/call',{name:'get_my_account'},issued.token)).data.result.structuredContent.user.id,'alice');
+  assert.equal((await mcp('tools/call',{name:'get_my_account'})).data.result.isError,true);
+  assert.equal((await mcp('tools/call',{name:'get_stats'})).data.result.isError,false);
+  assert.equal((await mcp('tools/call',{name:'get_stats',arguments:{inject:'x'}})).data.result.isError,true);
+  assert.equal((await mcp('tools/list',{},undefined,{Origin:'https://evil.example'})).status,403);
+  assert.equal((await mcp('tools/list',{},undefined,{'MCP-Protocol-Version':'nope'})).status,400);
+  assert.equal((await external('/mcp')).status,405);
+  assert.equal((await external('/mcp',{method:'POST',headers:{Accept:'application/json, text/event-stream'},body:{jsonrpc:'2.0',method:'notifications/initialized'}})).status,202);
+  assert.equal((await external('/api/developer/tokens/'+issued.id,{method:'DELETE',headers:{cookie:'dg_session=test-bob'},body:{}})).status,404);
+  assert.equal((await external('/api/developer/tokens/'+issued.id,{method:'DELETE',headers:{cookie:'dg_session=test-alice'},body:{}})).status,200);
+  assert.equal((await external('/api/v1/me',{token:issued.token})).status,401);
+  assert.equal((await mcp('tools/list',{},issued.token)).status,401);
+  const walletToken=await call('bob','/api/developer/tokens',{name:'wallet client',scopes:['wallet:read'],days:30});
+  assert.equal((await external('/api/v1/me/wallet',{token:walletToken.token})).data.balance,balance('bob'));
+  assert.equal((await external('/api/v1/me',{token:walletToken.token})).status,403);
+  db.prepare('UPDATE api_tokens SET expires_at=? WHERE id=?').run('2020-01-01',walletToken.id);
+  assert.equal((await external('/api/v1/me/wallet',{token:walletToken.token})).status,401);
 });
