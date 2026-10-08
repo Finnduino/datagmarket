@@ -1,3 +1,4 @@
+import { walletPage, eventsPage, closeWalletTools } from './wallet.js?v=1';
 const app = document.querySelector('#app');
 const account = document.querySelector('#account-actions');
 const loginDialog = document.querySelector('#login-dialog');
@@ -39,7 +40,7 @@ function toast(message) {
 
 function updateAccount() {
   account.innerHTML = me ? `
-    <span class="balance">◈ ${money(me.balance)} DGC</span>
+    <a class="balance" data-link href="/wallet">◈ ${money(me.balance)} DGC</a>
     ${['ADMIN','MODERATOR'].includes(me.role) ? `<a class="secondary staff-link" data-link href="/organizer">${me.role === 'ADMIN' ? 'Admin' : 'Staff'}</a>` : ''}
     <a class="profile-link" data-link href="/profile/${encodeURIComponent(me.username)}"><img src="${esc(me.avatarUrl)}" alt=""><span>${esc(me.username)}</span></a>
     <button class="text-button" data-logout>Exit</button>
@@ -352,12 +353,24 @@ async function profile(username) {
 }
 
 async function organizer() {
+  if (!me || !['ADMIN','MODERATOR'].includes(me.role)) { navigate('/events'); return; }
   const [{ markets }, staff, auditData] = await Promise.all([api('/api/markets'), api('/api/staff'), me.role==='ADMIN' ? api('/api/audit') : Promise.resolve({events:[]})]);
   app.innerHTML = `<div class="page staff-page"><section class="leaderboard-hero"><h1>Market resolution</h1><span>${esc(staff.role)}</span></section>
     <label class="oracle-picker"><span>Resolver identity</span><select id="true-resolver">${staff.resolvers.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}</select></label>
     <section>${markets.length ? markets.map(m=>`<div class="organizer-market"><div><strong>${esc(m.question)}</strong><p>${esc(m.status)} · ${m.marketType==='MULTIPLE'?`${m.options.length} choices`:'Yes / No'} · ${date(m.closesAt)}</p></div><div class="organizer-actions">${m.status==='RESOLVED'?`<span class="yes-text">${esc(m.options.find(o=>o.id===m.resolution)?.label || m.resolution)} · ${esc(m.oracleLabel)}</span>`:m.options.map((option,index)=>`<button class="secondary option-color-${index%6}" data-resolve="${esc(option.id)}" data-label="${esc(option.label)}" data-slug="${esc(m.slug)}">${esc(option.label)}</button>`).join('')}${staff.role==='ADMIN'?`<button class="danger-button" data-delete-market data-slug="${esc(m.slug)}">Delete</button>`:''}</div></div>`).join('') : '<div class="empty">No markets to manage.</div>'}</section></div>`;
   if(staff.canManageRoles) app.insertAdjacentHTML('beforeend', `<div class="page staff-page"><section class="leaderboard-hero"><h1>Permissions</h1></section><label class="staff-search search-big"><span>⌕</span><input id="staff-search" placeholder="Search traders"></label><div id="staff-list">${staff.users.map(u=>`<div class="staff-row" data-staff-name="${esc(u.username.toLowerCase())}"><div><strong>${esc(u.username)}</strong><p>${esc(u.role)}</p></div>${u.role==='ADMIN'?'<span>Admin</span>':`<select data-role data-user="${esc(u.id)}"><option value="USER" ${u.role==='USER'?'selected':''}>User</option><option value="MODERATOR" ${u.role==='MODERATOR'?'selected':''}>Moderator</option></select>`}</div>`).join('')}</div></div>
     <div class="page staff-page"><section class="leaderboard-hero"><h1>Audit ledger</h1><strong>House ◈ ${money(auditData.houseBalance)}</strong></section><div class="audit-list">${auditData.events.length ? auditData.events.map(event=>`<div class="audit-row"><span>${date(event.createdAt)}</span><strong>${esc(event.type)}</strong><span>${esc(event.actor?.username || event.user?.username || 'system')}</span><span>${event.amount===undefined?'':`${event.amount>0?'+':''}${money(event.amount)} DGC`}</span><small>${esc(event.market?.question || event.details?.question || event.details?.label || event.targetUser?.username || '')}</small></div>`).join('') : '<div class="empty">No audit events yet.</div>'}</div></div>`);
+  const panels=[...app.querySelectorAll('.staff-page')];
+  panels.forEach((panel,index)=>{panel.hidden=index!==0;});
+  app.insertAdjacentHTML('afterbegin',`<div class="page admin-shell"><h1>${staff.role==='ADMIN'?'Admin dashboard':'Staff dashboard'}</h1><nav class="wallet-nav"><a class="active" data-link href="/organizer">Administration</a><a data-link href="/events">Events & permissions →</a><a data-link href="/wallet">Wallet</a></nav><div class="admin-summary"><span><strong>${markets.filter(m=>m.status!=='RESOLVED').length}</strong> active markets</span>${staff.canManageRoles?`<span><strong>${staff.users.length}</strong> traders</span><span>Reward treasury <strong>◈ ${money(auditData.houseBalance)}</strong></span>`:''}</div><div class="admin-tabs" role="tablist">${panels.map((_,i)=>`<button role="tab" aria-selected="${i===0}" class="${i===0?'active':''}" data-admin-tab="${i}">${['Markets','Team permissions','Audit ledger'][i]}</button>`).join('')}</div></div>`);
+  app.querySelectorAll('[data-admin-tab]').forEach(button=>button.onclick=()=>{
+    panels.forEach((panel,index)=>panel.hidden=index!==Number(button.dataset.adminTab));
+    app.querySelectorAll('[data-admin-tab]').forEach(tab=>{tab.classList.toggle('active',tab===button);tab.setAttribute('aria-selected',String(tab===button));});
+  });
+  app.querySelectorAll('.audit-row').forEach((row,index)=>{
+    const details=auditData.events[index]?.details;
+    if(details)row.insertAdjacentHTML('beforeend',`<details class="audit-details"><summary>Details</summary><pre>${esc(JSON.stringify(details,null,2))}</pre></details>`);
+  });
   document.querySelectorAll('[data-resolve]').forEach(button=>button.addEventListener('click',async()=>{
     if(!confirm(`Resolve this market as “${button.dataset.label}”? This immediately pays winners.`)) return;
     button.disabled=true;
@@ -373,6 +386,7 @@ async function organizer() {
 }
 
 async function route() {
+  closeWalletTools();
   clearInterval(marketRefreshTimer);
   clearTimeout(marketPushTimer);
   marketEventSource?.close();
@@ -386,6 +400,8 @@ async function route() {
     else if (path === '/search') await searchPage();
     else if (path === '/leaderboard') await leaderboard();
     else if (path === '/organizer') await organizer();
+    else if (path === '/wallet') await walletPage({app,api,me,toast,navigate,updateUser:user=>{me=user;updateAccount();}});
+    else if (path === '/events') await eventsPage({app,api,me,toast,navigate});
     else if (path.startsWith('/market/')) await marketPage(path.slice(8));
     else if (path.startsWith('/profile/')) await profile(path.slice(9));
     else { app.innerHTML='<div class="page"><div class="empty">That prediction does not exist. Yet.</div></div>'; }
@@ -404,8 +420,11 @@ document.addEventListener('click', event => {
   const closeButton = event.target.closest('[data-close-dialog]');
   if (closeButton) closeButton.closest('dialog')?.close();
   const link = event.target.closest('[data-link]');
-  if (link && link.origin === location.origin) { event.preventDefault(); navigate(link.pathname); }
-  if (event.target.closest('[data-login]')) loginDialog.showModal();
+  if (link && link.origin === location.origin) { event.preventDefault(); navigate(link.pathname + link.search); }
+  if (event.target.closest('[data-login]')) {
+    if(['/wallet','/events'].includes(location.pathname))sessionStorage.setItem('walletReturn',location.pathname+location.search);
+    loginDialog.showModal();
+  }
   if (event.target.closest('[data-create]')) me ? createDialog.showModal() : loginDialog.showModal();
   if (event.target.closest('[data-edit-profile]') && me) {
     pendingAvatarData = undefined;
@@ -535,4 +554,8 @@ document.querySelector('#create-form').addEventListener('submit', async event =>
 });
 
 try { me=(await api('/api/me')).user; } catch { me=null; }
+if(me && location.pathname==='/'){
+  const pending=sessionStorage.getItem('walletReturn');sessionStorage.removeItem('walletReturn');
+  if(pending && /^\/(wallet|events)(\?|$)/.test(pending))history.replaceState({},'',pending);
+}
 updateAccount(); route();
