@@ -1,4 +1,5 @@
 import { walletPage, eventsPage, closeWalletTools } from './wallet.js?v=1';
+import { developersPage } from './developers.js?v=1';
 const app = document.querySelector('#app');
 const account = document.querySelector('#account-actions');
 const loginDialog = document.querySelector('#login-dialog');
@@ -400,6 +401,7 @@ async function route() {
     else if (path === '/search') await searchPage();
     else if (path === '/leaderboard') await leaderboard();
     else if (path === '/organizer') await organizer();
+    else if (path === '/developers') await developersPage({app,api,me,toast});
     else if (path === '/wallet') await walletPage({app,api,me,toast,navigate,updateUser:user=>{me=user;updateAccount();}});
     else if (path === '/events') await eventsPage({app,api,me,toast,navigate});
     else if (path.startsWith('/market/')) await marketPage(path.slice(8));
@@ -422,7 +424,7 @@ document.addEventListener('click', event => {
   const link = event.target.closest('[data-link]');
   if (link && link.origin === location.origin) { event.preventDefault(); navigate(link.pathname + link.search); }
   if (event.target.closest('[data-login]')) {
-    if(['/wallet','/events'].includes(location.pathname))sessionStorage.setItem('walletReturn',location.pathname+location.search);
+    if(['/wallet','/events','/developers'].includes(location.pathname))sessionStorage.setItem('walletReturn',location.pathname+location.search);
     loginDialog.showModal();
   }
   if (event.target.closest('[data-create]')) me ? createDialog.showModal() : loginDialog.showModal();
@@ -556,6 +558,6 @@ document.querySelector('#create-form').addEventListener('submit', async event =>
 try { me=(await api('/api/me')).user; } catch { me=null; }
 if(me && location.pathname==='/'){
   const pending=sessionStorage.getItem('walletReturn');sessionStorage.removeItem('walletReturn');
-  if(pending && /^\/(wallet|events)(\?|$)/.test(pending))history.replaceState({},'',pending);
+  if(pending && /^\/(wallet|events|developers)(\?|$)/.test(pending))history.replaceState({},'',pending);
 }
 updateAccount(); route();

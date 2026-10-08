@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { createWallet } from './wallet.js';
+import { createExternalApi } from './external-api.js';
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const publicDir = join(root, "public");
@@ -418,6 +419,15 @@ function verifyTelegramLogin(url) {
 }
 
 const walletApi = createWallet({db,json,body,requireUser,audit,houseEntry});
+const externalApi = createExternalApi({db,json,body,currentUser,audit,marketView,
+  readPublic: async path => {
+    let result,status;
+    const response={writeHead(code){status=code;},end(data){result=JSON.parse(data);}};
+    await api({method:'GET',headers:{}},response,new URL(path,'http://internal'));
+    if(status!==200)throw Object.assign(new Error(result.error||'Not found.'),{status});
+    return result;
+  }
+});
 
 async function api(req, res, url) {
   if (await walletApi(req,res,url)) return;
@@ -945,6 +955,7 @@ function staticFile(req, res, url) {
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    if(await externalApi(req,res,url))return;
     if (url.pathname.startsWith("/api/")) await api(req, res, url); else staticFile(req, res, url);
   } catch (error) {
     console.error(error);
