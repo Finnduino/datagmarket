@@ -669,3 +669,4 @@ footer a:hover{color:var(--text);text-decoration:underline;text-underline-offset
 /* Market funding and trading activity are separate statistics. */
 .card-bottom{flex-wrap:wrap;gap:8px 14px}
 .market-stats{flex-wrap:wrap}
+.quick-amounts.buy-adjustments{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
