@@ -666,3 +666,6 @@ footer a:hover{color:var(--text);text-decoration:underline;text-underline-offset
 .chart-header strong{display:flex;align-items:baseline;gap:10px}
 .chart-header strong>span{color:var(--text);font:inherit}
 .chart-header strong>b{color:var(--yes);font:750 27px/1 var(--sans);letter-spacing:-.03em}
+/* Market funding and trading activity are separate statistics. */
+.card-bottom{flex-wrap:wrap;gap:8px 14px}
+.market-stats{flex-wrap:wrap}
