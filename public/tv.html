@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Guild TV · Data(g)Market</title>
+  <link rel="icon" href="/favicon.png">
+  <link rel="stylesheet" href="/tv.css?v=1">
+</head>
+<body>
+  <header>
+    <a href="/" aria-label="Back to markets"><img src="/datamarket-logo.svg?v=2" alt="Data(g)Market"></a>
+    <span class="broadcast">GUILD ROOM <b>MARKET WATCH</b></span>
+    <div class="header-right"><span id="connection" role="status">Connecting…</span><time id="clock"></time><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div>
+  </header>
+  <main>
+    <section class="spotlight" aria-label="Featured market"><div class="eyebrow"><span>ON THE BOARD</span><span id="rotation"></span></div><div id="feature"><h1>Loading the guild’s markets…</h1></div></section>
+    <aside><div class="eyebrow"><span>THE WATCHLIST</span><span id="market-count"></span></div><div id="watchlist"></div><div class="join"><span>Have a prediction?</span><strong>datamarket.nahi.online</strong></div></aside>
+  </main>
+  <footer><span class="ticker-label">DGC <b>LIVE ODDS</b></span><div class="ticker-window"><div id="ticker" class="ticker-track"></div></div></footer>
+  <script type="module" src="/tv.js?v=1"></script>
+</body>
+</html>
