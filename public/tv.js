@@ -11,7 +11,6 @@ function render() {
   if (!markets.length) {
     $('#feature').innerHTML = '<h1>The board is clear.</h1><p class="empty">New guild predictions will appear here automatically.</p>';
     $('#watchlist').innerHTML = '';
-    $('#rotation').textContent = '';
     $('#ticker').textContent = 'Data(g)Market · Waiting for the next prediction';
     tickerSignature = '';
     return;
@@ -19,8 +18,7 @@ function render() {
   selected %= markets.length;
   const market = markets[selected], options = ranked(market), leader = options[0];
   const closed = new Date(market.closesAt).getTime() <= Date.now();
-  $('#rotation').textContent = `${selected+1} / ${markets.length}`;
-  $('#feature').innerHTML = `<div class="category">${esc(market.category)}</div><h1><a href="/market/${encodeURIComponent(market.slug)}">${esc(market.question)}</a></h1><div class="leader"><div class="odds">${percent(leader?.probability)}<small>%</small></div><div class="leader-label"><span>CURRENT LEADER</span>${esc(leader?.label || '—')}</div></div><div class="outcomes">${options.slice(0,4).map(option=>`<div class="outcome"><span class="outcome-name">${esc(option.label)}</span><strong>${percent(option.probability)}%</strong><svg viewBox="0 0 100 5" preserveAspectRatio="none" aria-hidden="true"><rect width="${Math.max(0,Math.min(100,Number(option.probability)*100))}" height="5"/></svg></div>`).join('')}</div><div class="market-meta"><span>◈ ${money(market.volume)} volume</span><span>${closed?'Awaiting resolution':`Closes ${new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Helsinki',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(market.closesAt))} · Helsinki`}</span></div>`;
+  $('#feature').innerHTML = `<h1><a href="/market/${encodeURIComponent(market.slug)}">${esc(market.question)}</a></h1><div class="leader"><div class="odds">${percent(leader?.probability)}<small>%</small></div><div class="leader-label"><span>CURRENT LEADER</span>${esc(leader?.label || '—')}</div></div><div class="outcomes">${options.slice(0,4).map(option=>`<div class="outcome"><span class="outcome-name">${esc(option.label)}</span><strong>${percent(option.probability)}%</strong><svg viewBox="0 0 100 5" preserveAspectRatio="none" aria-hidden="true"><rect width="${Math.max(0,Math.min(100,Number(option.probability)*100))}" height="5"/></svg></div>`).join('')}</div><div class="market-meta"><span>◈ ${money(market.volume)} volume</span><span>${closed?'Awaiting resolution':`Closes ${new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Helsinki',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(market.closesAt))} · Helsinki`}</span></div>`;
   const others = Array.from({length:Math.min(4,markets.length-1)},(_,i)=>markets[(selected+i+1)%markets.length]);
   $('#watchlist').innerHTML = others.map(m=>{const lead=ranked(m)[0];return `<a class="watch" href="/market/${encodeURIComponent(m.slug)}"><h2>${esc(m.question)}</h2><div class="watch-row"><span>${esc(lead?.label || '—')}</span><strong>${percent(lead?.probability)}%</strong></div></a>`;}).join('');
   const signature = JSON.stringify(markets.map(m=>[m.question,m.options]));
@@ -54,7 +52,6 @@ async function refresh() {
   } finally {fetching=false;updateStatus();}
 }
 async function keepAwake(){try{if('wakeLock' in navigator && document.visibilityState==='visible' && !wakeLock) {wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}catch{}}
-$('#fullscreen').addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();await keepAwake();}catch{$('#fullscreen').title='Use the TV browser fullscreen control';}});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){refresh();keepAwake();}});
 window.addEventListener('online',refresh);
 setInterval(refresh,10000);
