@@ -220,6 +220,25 @@ function bindMarketChart(slug, history, options) {
   bindChart(history,options);
 }
 
+function groupedActivity(trades) {
+  const groups = [];
+  for (const trade of trades) {
+    const previous = groups.at(-1);
+    const gap = previous ? new Date(previous.lastAt) - new Date(trade.createdAt) : Infinity;
+    if (previous && trade.action === 'BUY' && previous.action === 'BUY' && previous.username === trade.username && previous.outcome === trade.outcome && gap >= 0 && gap <= 5 * 60000) {
+      previous.amount += Number(trade.amount);
+      previous.shares += Number(trade.shares);
+      previous.count += 1;
+      previous.lastAt = trade.createdAt;
+    } else groups.push({ ...trade, amount:Number(trade.amount), shares:Number(trade.shares), count:1, lastAt:trade.createdAt });
+  }
+  return groups;
+}
+
+function activityMarkup(trades) {
+  return trades.length ? groupedActivity(trades).map(t=>`<div class="activity-row"><div><a href="/profile/${encodeURIComponent(t.username)}" data-link><strong>${esc(t.username)}</strong></a> <span>${t.action === 'BUY' ? 'bought' : 'sold'} ${money(t.shares)} ${esc(t.outcomeLabel || t.outcome)}${t.count>1 ? ` · ${t.count} buys` : ''}</span></div><span class="yes-text">◈ ${money(t.amount)}</span><span>${date(t.createdAt)}</span></div>`).join('') : '<div class="activity-row"><span>No trades yet.</span></div>';
+}
+
 async function marketPage(slug) {
   clearInterval(marketRefreshTimer);
   clearTimeout(marketPushTimer);
@@ -238,14 +257,14 @@ async function marketPage(slug) {
       <div class="market-stats"><span>◈ <strong id="market-volume">${money(market.volume)}</strong> volume</span><span title="DGC backing this market, including the house seed">◈ <strong id="market-pool">${money(market.marketPool)}</strong> market pool</span><span>${market.status === 'OPEN' ? `${relative(market.closesAt)} · ` : ''}${date(market.closesAt)}</span><span>By <a href="/profile/${encodeURIComponent(market.creator)}" data-link><strong>${esc(market.creator)}</strong></a></span></div></div>
       <div class="chart-wrap multi-chart">${marketChartMarkup(market,history)}</div>
       <section class="rules"><h2>Rules</h2><p>${esc(market.description)}</p><div class="resolution-source">${market.status === 'RESOLVED' && market.oracleLabel ? `Resolved by ${esc(market.oracleLabel)}` : 'Resolved by mysterious forces'}</div></section>
-      <section class="activity"><h2>Activity</h2>${trades.length ? trades.map(t=>`<div class="activity-row"><div><a href="/profile/${encodeURIComponent(t.username)}" data-link><strong>${esc(t.username)}</strong></a> <span>${t.action === 'BUY' ? 'bought' : 'sold'} ${money(t.shares)} ${esc(t.outcomeLabel || t.outcome)}</span></div><span class="yes-text">◈ ${money(t.amount)}</span><span>${date(t.createdAt)}</span></div>`).join('') : '<div class="activity-row"><span>No trades yet.</span></div>'}</section>
+      <section class="activity"><h2>Activity</h2><div id="market-activity">${activityMarkup(trades)}</div></section>
     </section>
     <aside>${market.status === 'OPEN' ? `<div class="trade-panel">
       <div class="trade-tabs"><button class="pill-button ${tradeState.action==='BUY'?'active':''}" data-action="BUY">Buy</button><button class="pill-button ${tradeState.action==='SELL'?'active':''}" data-action="SELL">Sell</button></div>
       <div class="outcome-list">${market.options.map((option,index)=>`<button class="outcome option-color-${index%6} ${tradeState.outcome===option.id?'active':''}" data-outcome="${esc(option.id)}"><span>${esc(option.label)}</span><strong>${pct(option.probability)}</strong></button>`).join('')}</div>
       <div class="amount-label"><span>${tradeState.action==='BUY'?'Amount':'Shares'}</span><span>${me ? (tradeState.action==='BUY' ? `◈ ${money(me.balance)} available` : `${money(currentShares)} owned`) : 'Sign in required'}</span></div>
       <div class="amount-box"><input id="trade-amount" type="number" min="1" step="1" value="25"><span>${tradeState.action==='BUY'?'DGC':'SHARES'}</span></div>
-      <div class="quick-amounts">${tradeState.action==='BUY' ? [10,25,50,100].map(n=>`<button data-quick="${n}">+${n}</button>`).join('') : `<button data-quick="${currentShares/4}">25%</button><button data-quick="${currentShares/2}">50%</button><button data-quick="${currentShares}">MAX</button>`}</div>
+      <div class="quick-amounts ${tradeState.action==='BUY'?'buy-adjustments':''}">${tradeState.action==='BUY' ? [10,25,50,100,-10,-25,-50,-100].map(n=>`<button data-adjust="${n}">${n>0?'+':'−'}${Math.abs(n)}</button>`).join('') : `<button data-quick="${currentShares/4}">25%</button><button data-quick="${currentShares/2}">50%</button><button data-quick="${currentShares}">MAX</button>`}</div>
       <div class="estimate"><div><span>Market price</span><strong>${pct(selected?.probability || 0)}</strong></div><div class="to-win"><span>${tradeState.action==='BUY'?'To win':'You receive'}</span><strong id="trade-quote">—</strong></div>${me ? `<div><span>Your position</span><strong>${money(currentShares)} shares</strong></div>` : ''}</div>
       <button class="primary wide" id="trade-submit">${me ? `${tradeState.action==='BUY'?'Buy':'Sell'} ${esc(selected?.label || '')}` : 'Sign in to trade'} <span>→</span></button>
       ${market.marketType==='MULTIPLE'?`<form class="add-option" id="add-option-form"><div><input maxlength="50" required placeholder="Add an outcome"><button class="secondary">Add for 100 DGC</button></div></form>`:''}
@@ -259,6 +278,7 @@ async function marketPage(slug) {
       if(!wrap) return;
       document.querySelector('#market-volume').textContent=money(fresh.market.volume);
       document.querySelector('#market-pool').textContent=money(fresh.market.marketPool);
+      document.querySelector('#market-activity').innerHTML=activityMarkup(fresh.trades);
       wrap.innerHTML=marketChartMarkup(fresh.market,fresh.history);
       bindMarketChart(slug,fresh.history,fresh.market.options);
     } catch (_) {}
@@ -293,6 +313,11 @@ async function marketPage(slug) {
   };
   tradeAmount?.addEventListener('input',updateQuote);
   document.querySelectorAll('[data-quick]').forEach(b=>b.addEventListener('click',()=>{tradeAmount.value=Math.max(0,Number(b.dataset.quick).toFixed(2));updateQuote()}));
+  document.querySelectorAll('[data-adjust]').forEach(b=>b.addEventListener('click',()=>{
+    const current=Number(tradeAmount.value)||0;
+    tradeAmount.value=Math.max(0,Math.round((current+Number(b.dataset.adjust))*100)/100);
+    updateQuote();
+  }));
   updateQuote();
   document.querySelector('#trade-submit')?.addEventListener('click', async () => {
     if (!me) return loginDialog.showModal();
