@@ -513,8 +513,9 @@ closeMinute.innerHTML = [0, 15, 30, 45].map(minute => `<option value="${minute}"
 setDefaultCloseTime();
 
 function renderOpeningOptions() {
+  const selected = document.querySelector('#multi-option-picks input:checked')?.value;
   const labels = marketOptionsInput.value.split('\n').map(value => value.trim()).filter(Boolean).slice(0, 10);
-  document.querySelector('#multi-option-picks').innerHTML = labels.map((label, index) => `<label><input type="radio" name="openingOutcome" value="${esc(label)}" ${index === 0 ? 'required' : ''}><span>${esc(label)}</span></label>`).join('');
+  document.querySelector('#multi-option-picks').innerHTML = labels.map((label, index) => `<label><input type="radio" name="openingOutcome" value="${esc(label)}" ${index === 0 ? 'required' : ''} ${label === selected ? 'checked' : ''}><span>${esc(label)}</span></label>`).join('');
 }
 
 marketTypeInput.addEventListener('change', () => {
