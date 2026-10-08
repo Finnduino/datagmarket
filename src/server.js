@@ -923,6 +923,7 @@ async function api(req, res, url) {
 const mime = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".pdf": "application/pdf" };
 function staticFile(req, res, url) {
   let path = url.pathname === "/" ? "/index.html" : url.pathname;
+  if (path === "/tv" || path === "/tv/") path = "/tv.html";
   const candidate = normalize(join(publicDir, path));
   const file = candidate.startsWith(publicDir) && existsSync(candidate) ? candidate : join(publicDir, "index.html");
   const content = readFileSync(file);
