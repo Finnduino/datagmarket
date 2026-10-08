@@ -390,7 +390,7 @@ function marketView(m, userId = null) {
     status: (m.status === "OPEN" && new Date(m.closes_at) <= new Date()) ? "CLOSED" : m.status,
     resolution: m.resolution, oracleLabel: m.oracle_label, createdAt: m.created_at, creator: creator?.username || "Unknown",
     marketType: m.market_type || "BINARY", pricingModel: m.pricing_model || "LMSR", probability: leading?.probability || 0, leadingOption: leading,
-    options: optionViews, volume: round(m.volume, 2),
+    options: optionViews, volume: round(m.volume, 2), marketPool: m.status === "RESOLVED" ? 0 : round(m.collateral, 2),
     positions: Object.fromEntries(positions.map((p) => [p.outcome, round(p.shares, 4)])),
   };
 }

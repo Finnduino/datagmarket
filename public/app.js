@@ -71,7 +71,7 @@ function marketCard(m) {
     </div>
     <svg class="distribution-bar" viewBox="0 0 100 6" preserveAspectRatio="none" role="img" aria-label="Current outcome distribution">${distribution}</svg>
     <div class="outcome-mini">${ranked.slice(0,3).map(option=>`<span class="option-color-${option.colorIndex}"><b>${esc(option.label)}</b><strong>${pct(option.probability)}</strong></span>`).join('')}</div>
-    <div class="card-bottom"><span>◈ ${money(m.volume)} volume</span></div>
+    <div class="card-bottom"><span>◈ ${money(m.volume)} volume</span><span title="DGC backing this market, including the house seed">◈ ${money(m.marketPool)} market pool</span></div>
   </a>`;
 }
 
@@ -235,7 +235,7 @@ async function marketPage(slug) {
   app.innerHTML = `<div class="page market-page"><a href="/" data-link class="back">← Markets</a>
     <div class="market-layout"><section>
       <div class="market-summary"><span class="market-category">${esc(market.category)}${market.status !== 'OPEN' ? ` · ${esc(market.status)}` : ''}</span><h1 class="market-title">${esc(market.question)}</h1>
-      <div class="market-stats"><span>◈ <strong>${money(market.volume)}</strong> volume</span><span>${market.status === 'OPEN' ? `${relative(market.closesAt)} · ` : ''}${date(market.closesAt)}</span><span>By <a href="/profile/${encodeURIComponent(market.creator)}" data-link><strong>${esc(market.creator)}</strong></a></span></div></div>
+      <div class="market-stats"><span>◈ <strong id="market-volume">${money(market.volume)}</strong> volume</span><span title="DGC backing this market, including the house seed">◈ <strong id="market-pool">${money(market.marketPool)}</strong> market pool</span><span>${market.status === 'OPEN' ? `${relative(market.closesAt)} · ` : ''}${date(market.closesAt)}</span><span>By <a href="/profile/${encodeURIComponent(market.creator)}" data-link><strong>${esc(market.creator)}</strong></a></span></div></div>
       <div class="chart-wrap multi-chart">${marketChartMarkup(market,history)}</div>
       <section class="rules"><h2>Rules</h2><p>${esc(market.description)}</p><div class="resolution-source">${market.status === 'RESOLVED' && market.oracleLabel ? `Resolved by ${esc(market.oracleLabel)}` : 'Resolved by mysterious forces'}</div></section>
       <section class="activity"><h2>Activity</h2>${trades.length ? trades.map(t=>`<div class="activity-row"><div><a href="/profile/${encodeURIComponent(t.username)}" data-link><strong>${esc(t.username)}</strong></a> <span>${t.action === 'BUY' ? 'bought' : 'sold'} ${money(t.shares)} ${esc(t.outcomeLabel || t.outcome)}</span></div><span class="yes-text">◈ ${money(t.amount)}</span><span>${date(t.createdAt)}</span></div>`).join('') : '<div class="activity-row"><span>No trades yet.</span></div>'}</section>
@@ -257,6 +257,8 @@ async function marketPage(slug) {
       const fresh=await api(`/api/markets/${encodeURIComponent(slug)}`);
       const wrap=document.querySelector('.chart-wrap');
       if(!wrap) return;
+      document.querySelector('#market-volume').textContent=money(fresh.market.volume);
+      document.querySelector('#market-pool').textContent=money(fresh.market.marketPool);
       wrap.innerHTML=marketChartMarkup(fresh.market,fresh.history);
       bindMarketChart(slug,fresh.history,fresh.market.options);
     } catch (_) {}
