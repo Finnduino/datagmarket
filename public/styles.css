@@ -433,7 +433,9 @@ main{min-height:calc(100vh - 180px)}
 
 /* Dialogs and feedback */
 .modal{
-  overflow:visible;
+  max-height:calc(100dvh - 32px);
+  overflow:auto;
+  overscroll-behavior:contain;
   border-color:#555a50;
   border-radius:14px;
   background:var(--surface);
@@ -670,3 +672,15 @@ footer a:hover{color:var(--text);text-decoration:underline;text-underline-offset
 .card-bottom{flex-wrap:wrap;gap:8px 14px}
 .market-stats{flex-wrap:wrap}
 .quick-amounts.buy-adjustments{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+
+/* Keep expanded market forms inside the dialog at every viewport size. */
+#create-form .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+#create-form .form-grid>*,#create-form fieldset,#create-form label{min-width:0}
+#create-form textarea{max-width:100%;resize:vertical}
+#create-form .opening-stake label{position:relative;margin:0}
+#create-form .opening-stake input[type=radio]{width:1px;height:1px;min-height:0;inset:50% auto auto 0;padding:0}
+#create-form .opening-stake input:focus-visible+span{outline:2px solid var(--yes);outline-offset:2px}
+#create-form .opening-stake span{white-space:normal;overflow-wrap:anywhere}
+#create-form h2{padding-right:40px}
+#create-form .modal-footer{position:sticky;bottom:-28px;background:var(--surface);padding:16px 0;margin-bottom:-1px;z-index:2}
+@media(max-width:600px){#create-form .modal-footer{bottom:-22px}}
