@@ -31,3 +31,17 @@ QR libraries are vendored locally in public/vendor with their licenses.
 
 Run npm run check and npm test. Tests start an isolated server/database and never
 touch production balances. SQLite schema additions are automatic and additive.
+
+## Event screen
+
+Open `/event` on the venue display after signing in through `/events` as an admin
+or a reward granter. It shares `/tv`'s market board and ticker, with a reward QR
+in place of the trading QR. The newest currently open reward event you can grant
+is selected automatically; `/event?event=EVENT_ID` pins one event.
+
+Attendees scan with their phone camera, sign in with Telegram, and press Claim
+DGC. Codes rotate and expire after 15 minutes. Claims use the display operator's
+current permissions and grant allowance, the event budget, and the house treasury.
+Manual grants and QR claims share the same one-reward-per-attendee limit. Paused,
+ended, exhausted, or disconnected displays hide the QR. A QR link can be shared;
+it is not proof of physical presence.

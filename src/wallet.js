@@ -28,6 +28,10 @@ export function createWallet({db, json, body, requireUser, audit, houseEntry}) {
       token TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES dgc_events(id), user_id TEXT NOT NULL REFERENCES users(id),
       amount REAL NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, claim_id TEXT
     );
+    CREATE TABLE IF NOT EXISTS reward_codes (
+      event_id TEXT NOT NULL REFERENCES dgc_events(id), staff_id TEXT NOT NULL REFERENCES users(id),
+      token TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, PRIMARY KEY(event_id,staff_id)
+    );
     CREATE INDEX IF NOT EXISTS idx_transfers_recipient ON wallet_transfers(recipient_id,created_at);
   `);
   const fail = (message,status=400) => { throw Object.assign(new Error(message),{status}); };
@@ -49,6 +53,23 @@ export function createWallet({db, json, body, requireUser, audit, houseEntry}) {
   const credit = (id,value) => db.prepare('UPDATE users SET balance=balance+? WHERE id=?').run(value,id);
   const debit = (id,value) => {if(!db.prepare('UPDATE users SET balance=balance-? WHERE id=? AND balance>=?').run(value,id,value).changes)fail('Not enough DGC.');};
 
+  const grant = (u,id,targetId) => {
+    const e=event(id);open(e);const p=permission(u,e,'GRANT');const target=person(targetId);
+    if(target.id===u.id && u.role!=='ADMIN')fail('Another event staff member must issue your reward.');
+    const old=db.prepare("SELECT * FROM event_claims WHERE event_id=? AND user_id=? AND kind='GRANT'").get(id,target.id);
+    if(old)return {claim:old,alreadyProcessed:true};
+    if(e.reward<=0)fail('Rewards are disabled for this event.');
+    if(e.spent+e.reward>e.budget+1e-8)fail('Event reward budget exhausted.');
+    if(u.role!=='ADMIN' && p.granted+e.reward>p.grant_limit+1e-8)fail('Your event grant allowance is exhausted.');
+    if(db.prepare("SELECT balance FROM system_accounts WHERE name='HOUSE'").get().balance<e.reward)fail('House treasury has insufficient DGC.');
+    const claimId=randomUUID(),at=new Date().toISOString();
+    credit(target.id,e.reward);houseEntry('EVENT_REWARD',-e.reward,null,{eventId:id,claimId,userId:target.id},at);ledger(target.id,'EVENT_REWARD',e.reward,at);
+    db.prepare('UPDATE dgc_events SET spent=ROUND(spent+?,2) WHERE id=?').run(e.reward,id);
+    if(p)db.prepare('UPDATE event_permissions SET granted=ROUND(granted+?,2) WHERE event_id=? AND user_id=?').run(e.reward,id,u.id);
+    db.prepare('INSERT INTO event_claims VALUES(?,?,?,?,?,?,?)').run(claimId,id,target.id,u.id,'GRANT',e.reward,at);
+    audit('EVENT_REWARD',{actorUserId:u.id,targetUserId:target.id,details:{eventId:id,event:e.name,claimId,amount:e.reward},createdAt:at});return {claim:{id:claimId,amount:e.reward}};
+  };
+
   return async (req,res,url) => {
     if(!url.pathname.startsWith('/api/wallet') && !url.pathname.startsWith('/api/events'))return false;
     const u=requireUser(req,res);if(!u)return true;
@@ -56,7 +77,35 @@ export function createWallet({db, json, body, requireUser, audit, houseEntry}) {
       if(req.method!=='GET' && (!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json') || req.headers['sec-fetch-site']==='cross-site'))fail('Use a same-site JSON request.',403);
       const path=url.pathname;
       let result;
-      if(req.method==='GET' && path==='/api/wallet') {
+      if(req.method==='GET' && path==='/api/events/display') {
+        const at=new Date().toISOString(),requested=url.searchParams.get('event');
+        const e=db.prepare(`SELECT e.* FROM dgc_events e LEFT JOIN event_permissions p ON p.event_id=e.id AND p.user_id=?
+          WHERE e.active=1 AND e.starts_at<=? AND e.ends_at>=? AND e.reward>0
+          AND (?='ADMIN' OR p.can_grant=1) AND (? IS NULL OR e.id=?) ORDER BY e.starts_at DESC,e.id LIMIT 1`).get(u.id,at,at,u.role,requested,requested);
+        if(!e)result={event:null};
+        else {
+          const p=permission(u,e,'GRANT');
+          const available=e.spent+e.reward<=e.budget+1e-8 && (u.role==='ADMIN'||p.granted+e.reward<=p.grant_limit+1e-8)
+            && db.prepare("SELECT balance FROM system_accounts WHERE name='HOUSE'").get().balance>=e.reward;
+          let code;
+          if(available){
+            code=db.prepare('SELECT * FROM reward_codes WHERE event_id=? AND staff_id=?').get(e.id,u.id);
+            if(!code || Date.parse(code.expires_at)<Date.now()+120000){
+              code={token:randomBytes(24).toString('hex'),expires_at:new Date(Date.now()+15*60000).toISOString()};
+              db.prepare('INSERT INTO reward_codes VALUES(?,?,?,?) ON CONFLICT(event_id,staff_id) DO UPDATE SET token=excluded.token,expires_at=excluded.expires_at').run(e.id,u.id,code.token,code.expires_at);
+            }
+          }
+          result={event:{id:e.id,name:e.name,reward:e.reward,endsAt:e.ends_at},token:code?.token,expiresAt:code?.expires_at,available};
+        }
+      } else if(req.method==='POST' && path==='/api/events/claim') {
+        const input=await body(req);
+        result=tx(()=>{
+          const code=db.prepare('SELECT * FROM reward_codes WHERE token=?').get(String(input.token||''));
+          if(!code || Date.parse(code.expires_at)<=Date.now())fail('Reward QR expired. Scan the event screen again.');
+          const issuer=db.prepare('SELECT * FROM users WHERE id=?').get(code.staff_id);
+          return grant(issuer,code.event_id,u.id);
+        });
+      } else if(req.method==='GET' && path==='/api/wallet') {
         result={user:person(u.id),transfers:db.prepare(`SELECT t.*,s.username sender,r.username recipient FROM wallet_transfers t JOIN users s ON s.id=t.sender_id JOIN users r ON r.id=t.recipient_id WHERE sender_id=? OR recipient_id=? ORDER BY created_at DESC LIMIT 100`).all(u.id,u.id),claims:db.prepare(`SELECT c.*,e.name event_name,s.username staff FROM event_claims c JOIN dgc_events e ON e.id=c.event_id JOIN users s ON s.id=c.staff_id WHERE c.user_id=? ORDER BY c.created_at DESC LIMIT 100`).all(u.id)};
       } else if(req.method==='GET' && path==='/api/wallet/people') {
         const q=String(url.searchParams.get('q')||'').trim();
@@ -117,21 +166,7 @@ export function createWallet({db, json, body, requireUser, audit, houseEntry}) {
           result={claims:db.prepare('SELECT c.*,u.username,s.username staff FROM event_claims c JOIN users u ON u.id=c.user_id JOIN users s ON s.id=c.staff_id WHERE event_id=? ORDER BY created_at DESC LIMIT 100').all(e.id)};
         } else if(req.method==='POST' && action==='grant') {
           const input=await body(req);
-          result=tx(()=>{const e=event(id);open(e);const p=permission(u,e,'GRANT');const target=person(input.userId);
-            if(target.id===u.id && u.role!=='ADMIN')fail('Another event staff member must issue your reward.');
-            const old=db.prepare("SELECT * FROM event_claims WHERE event_id=? AND user_id=? AND kind='GRANT'").get(id,target.id);
-            if(old)return {claim:old,alreadyProcessed:true};
-            if(e.reward<=0)fail('Rewards are disabled for this event.');
-            if(e.spent+e.reward>e.budget+1e-8)fail('Event reward budget exhausted.');
-            if(u.role!=='ADMIN' && p.granted+e.reward>p.grant_limit+1e-8)fail('Your event grant allowance is exhausted.');
-            if(db.prepare("SELECT balance FROM system_accounts WHERE name='HOUSE'").get().balance<e.reward)fail('House treasury has insufficient DGC.');
-            const claimId=randomUUID(),at=new Date().toISOString();
-            credit(target.id,e.reward);houseEntry('EVENT_REWARD',-e.reward,null,{eventId:id,claimId,userId:target.id},at);ledger(target.id,'EVENT_REWARD',e.reward,at);
-            db.prepare('UPDATE dgc_events SET spent=ROUND(spent+?,2) WHERE id=?').run(e.reward,id);
-            if(p)db.prepare('UPDATE event_permissions SET granted=ROUND(granted+?,2) WHERE event_id=? AND user_id=?').run(e.reward,id,u.id);
-            db.prepare('INSERT INTO event_claims VALUES(?,?,?,?,?,?,?)').run(claimId,id,target.id,u.id,'GRANT',e.reward,at);
-            audit('EVENT_REWARD',{actorUserId:u.id,targetUserId:target.id,details:{eventId:id,event:e.name,claimId,amount:e.reward},createdAt:at});return {claim:{id:claimId,amount:e.reward}};
-          });
+          result=tx(()=>grant(u,id,input.userId));
         } else if(req.method==='POST' && action==='entry-token') {
           result=tx(()=>{const e=event(id);open(e);if(e.entry_cost<=0)fail('DGC entry is disabled for this event.');
             if(person(u.id).balance<e.entry_cost)fail('Not enough DGC.');

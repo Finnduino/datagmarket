@@ -938,6 +938,7 @@ const mime = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=u
 function staticFile(req, res, url) {
   let path = url.pathname === "/" ? "/index.html" : url.pathname;
   if (path === "/tv" || path === "/tv/") path = "/tv.html";
+  if (path === "/event" || path === "/event/") path = "/event.html";
   const candidate = normalize(join(publicDir, path));
   const file = candidate.startsWith(publicDir) && existsSync(candidate) ? candidate : join(publicDir, "index.html");
   const content = readFileSync(file);

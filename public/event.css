@@ -1,0 +1,1 @@
+.join canvas{width:clamp(150px,14vw,256px)!important;height:auto!important;flex-shrink:0;background:white;border-radius:8px}.join canvas[hidden]{display:none}#reward-amount{color:var(--green);font-size:clamp(20px,2vw,36px);font-weight:700;margin:8px 0}.join div{flex:1}.join{flex-wrap:nowrap}@media(max-width:400px){.join{flex-wrap:wrap}}
