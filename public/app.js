@@ -4,6 +4,11 @@ const app = document.querySelector('#app');
 const account = document.querySelector('#account-actions');
 const loginDialog = document.querySelector('#login-dialog');
 const createDialog = document.querySelector('#create-dialog');
+const moreDialog = document.querySelector('#mobile-more-dialog');
+const moreButton = document.querySelector('#mobile-more');
+moreButton.addEventListener('click',()=>{moreDialog.showModal();moreButton.setAttribute('aria-expanded','true');});
+moreDialog.addEventListener('close',()=>moreButton.setAttribute('aria-expanded','false'));
+matchMedia('(max-width:900px)').addEventListener('change',e=>{if(!e.matches)moreDialog.close();});
 const profileDialog = document.querySelector('#profile-dialog');
 let me = null;
 let tradeState = { action: 'BUY', outcome: 'YES' };
@@ -40,6 +45,12 @@ function toast(message) {
 }
 
 function updateAccount() {
+  document.querySelector('#mobile-more-account').innerHTML = me ? `
+    <a data-link href="/profile/${encodeURIComponent(me.username)}">My profile <span>${esc(me.username)}</span></a>
+    ${['ADMIN','MODERATOR'].includes(me.role)?'<a data-link href="/organizer">'+(me.role==='ADMIN'?'Admin':'Staff')+' tools <span>→</span></a>':''}
+    <button data-logout>Sign out</button>
+  ` : '<button data-login>Sign in with Telegram <span>→</span></button>';
+
   account.innerHTML = me ? `
     <a class="balance" data-link href="/wallet">◈ ${money(me.balance)} DGC</a>
     ${['ADMIN','MODERATOR'].includes(me.role) ? `<a class="secondary staff-link" data-link href="/organizer">${me.role === 'ADMIN' ? 'Admin' : 'Staff'}</a>` : ''}
@@ -387,6 +398,7 @@ async function organizer() {
 }
 
 async function route() {
+  moreDialog.close();
   closeWalletTools();
   clearInterval(marketRefreshTimer);
   clearTimeout(marketPushTimer);
@@ -413,6 +425,7 @@ async function route() {
       link.classList.toggle('current', current);
       if (current) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
     });
+    moreButton.classList.toggle('current', !['/','/leaderboard','/wallet'].includes(activePath));
     app.focus({ preventScroll:true });
   } catch(e) { app.innerHTML=`<div class="page"><div class="empty">${esc(e.message)}</div></div>`; }
 }
@@ -423,6 +436,7 @@ document.addEventListener('click', event => {
   if (closeButton) closeButton.closest('dialog')?.close();
   const link = event.target.closest('[data-link]');
   if (link && link.origin === location.origin) { event.preventDefault(); navigate(link.pathname + link.search); }
+  if (event.target.closest('[data-login],[data-logout]')) moreDialog.close();
   if (event.target.closest('[data-login]')) {
     if(['/wallet','/events','/developers'].includes(location.pathname))sessionStorage.setItem('walletReturn',location.pathname+location.search);
     loginDialog.showModal();
