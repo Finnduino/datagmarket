@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Guild Event · Data(g)Market</title>
+  <link rel="icon" href="/favicon.png">
+  <link rel="stylesheet" href="/tv.css?v=2">
+  <link rel="stylesheet" href="/event.css?v=1">
+</head>
+<body data-watch-limit="3">
+  <header>
+    <a href="/" aria-label="Back to markets"><img src="/datamarket-logo.svg?v=2" alt="Data(g)Market"></a>
+    <span class="broadcast">GUILD ROOM <b>EVENT LIVE</b></span>
+    <div class="header-right"><span id="connection" role="status">Connecting…</span><time id="clock"></time></div>
+  </header>
+  <main>
+    <section class="spotlight" aria-label="Featured market"><div id="feature"><h1>Loading the guild’s markets…</h1></div></section>
+    <aside><div class="eyebrow"><span>THE WATCHLIST</span><span id="market-count"></span></div><div id="watchlist"></div><a class="join" id="event-reward" href="/events" aria-live="polite"><canvas id="reward-qr" width="256" height="256" hidden aria-label="Scan to claim the event reward"></canvas><div><span id="reward-status">Loading event reward…</span><strong id="reward-name">Participation rewards</strong><p id="reward-amount"></p></div></a></aside>
+  </main>
+  <footer><span class="ticker-label">DGC <b>LIVE ODDS</b></span><div class="ticker-window"><div id="ticker" class="ticker-track"></div></div></footer>
+  <script src="/vendor/qrcode.js"></script>
+  <script type="module" src="/event.js?v=1"></script>
+  <script type="module" src="/tv.js?v=4"></script>
+</body>
+</html>

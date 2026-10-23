@@ -135,4 +135,36 @@ test('wallet/event accounting and external REST/MCP authentication isolation',as
   assert.equal((await external('/api/v1/me',{token:walletToken.token})).status,403);
   db.prepare('UPDATE api_tokens SET expires_at=? WHERE id=?').run('2020-01-01',walletToken.id);
   assert.equal((await external('/api/v1/me/wallet',{token:walletToken.token})).status,401);
+  // Display codes retain the issuing staff member's permissions and allowance.
+  const displayEvent=await call('admin','/api/events',{...config,name:'Display test',budget:100});
+  const displayId=displayEvent.event.id,displayBase='/api/events/'+displayId;
+  assert.equal((await call('unknown','/api/events/display')).status,401);
+  assert.equal((await call('alice','/api/events/display?event='+displayId)).event,null);
+  await call('admin',displayBase+'/staff',{userId:'staff',canGrant:true,limit:25});
+  const display=await call('staff','/api/events/display?event='+displayId);
+  assert.equal(display.event.name,'Display test');assert.equal(display.available,true);
+  assert.equal((await call('unknown','/api/events/claim',{token:display.token})).status,401);
+  assert.equal((await call('alice','/api/events/claim',{token:'invalid'})).status,400);
+  const beforeClaim=balance('alice'),beforeTotal=total();
+  const claims=await Promise.all([1,2].map(()=>call('alice','/api/events/claim',{token:display.token})));
+  assert.ok(claims.every(c=>c.status===200));assert.equal(claims.filter(c=>c.alreadyProcessed).length,1);
+  assert.equal(balance('alice'),beforeClaim+25);assert.equal(total(),beforeTotal);
+  assert.equal((await call('bob','/api/events/claim',{token:display.token})).status,400);
+  assert.equal((await call('staff','/api/events/display?event='+displayId)).available,false);
+  await call('admin',displayBase+'/staff',{userId:'staff',canGrant:false,limit:25});
+  assert.equal((await call('bob','/api/events/claim',{token:display.token})).status,403);
+  const adminDisplay=await call('admin','/api/events/display?event='+displayId);
+  db.prepare('UPDATE reward_codes SET expires_at=? WHERE token=?').run('2020-01-01',adminDisplay.token);
+  assert.equal((await call('bob','/api/events/claim',{token:adminDisplay.token})).status,400);
+  const fresh=await call('admin','/api/events/display?event='+displayId);
+  assert.notEqual(fresh.token,adminDisplay.token);
+  await call('admin','/api/events',{...config,id:displayId,budget:100,active:false});
+  assert.equal((await call('bob','/api/events/claim',{token:fresh.token})).status,400);
+  assert.equal((await call('admin','/api/events/display?event='+displayId)).event,null);
+  for(const route of ['/tv','/event','/event/']){
+    const response=await fetch('http://127.0.0.1:'+port+route);assert.equal(response.status,200);
+    const html=await response.text();assert.ok(html.includes('/tv.js'));
+    assert.equal(html.includes('id="reward-qr"'),route!=='/tv');
+  }
+
 });

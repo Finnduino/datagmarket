@@ -75,6 +75,19 @@ export async function eventsPage(ctx){
   const {app,api,me,toast,navigate}=ctx;
   if(!me){app.innerHTML='<div class="page wallet-page"><h1>Events & rewards</h1><button class="primary" data-login>Sign in with Telegram</button></div>';return;}
   const {events}=await api('/api/events');const isAdmin=me.role==='ADMIN';
+  const rewardToken=new URLSearchParams(location.search).get('reward');
+  if(rewardToken){
+    const d=dialog('Claim event reward','<p>Collect your participation reward from the event screen. Each attendee can claim once.</p><button class="primary wide claim-reward">Claim DGC</button><p class="claim-result" role="status"></p>');
+    d.querySelector('button.claim-reward').onclick=async ev=>{
+      ev.target.disabled=true;
+      try{const result=await api('/api/events/claim',{method:'POST',body:JSON.stringify({token:rewardToken})});
+        d.querySelector('.claim-result').textContent=result.alreadyProcessed?'You already received this event reward.':`Received ${money(result.claim.amount)} DGC ✓`;
+        history.replaceState({},'', '/events');
+        const latest=await api('/api/wallet');ctx.updateUser?.({...me,balance:latest.user.balance});
+      }catch(error){d.querySelector('.claim-result').textContent=error.message;ev.target.disabled=false;}
+    };
+  }
+
   app.innerHTML=`<div class="page wallet-page">${tabs('events',isAdmin||me.role==='MODERATOR')}<div class="discovery-head"><h1>${isAdmin?'Events & permissions':'Events & rewards'}</h1>${isAdmin?'<button class="primary" id="new-event">Create event ＋</button>':''}</div><div class="event-grid">${events.map(e=>{const staff=isAdmin||e.can_grant||e.can_redeem;const available=e.active&&Date.parse(e.starts_at)<=Date.now()&&Date.parse(e.ends_at)>=Date.now();return `<article class="wallet-panel event-card" data-event="${esc(e.id)}"><div class="event-state">${!e.active?'Paused':available?'Open':Date.parse(e.starts_at)>Date.now()?'Upcoming':'Ended'}</div><h2>${esc(e.name)}</h2><p>${esc(e.description)}</p><p class="event-date">${at(e.starts_at)} — ${at(e.ends_at)}</p><div class="event-figures"><span>Reward<strong>◈ ${money(e.reward)}</strong></span><span>Entry<strong>◈ ${money(e.entry_cost)}</strong></span></div>${staff?`<p>Budget used: ${money(e.spent)} / ${money(e.budget)} DGC${!isAdmin&&e.can_grant?` · Your allowance: ${money(e.granted)} / ${money(e.grant_limit)}`:''}</p>`:''}<div class="event-actions">${e.rewarded?'<span class="yes-text">Reward received ✓</span>':''}${e.redeemed?'<span class="yes-text">Checked in ✓</span>':e.entry_cost>0?`<button class="secondary" data-entry ${!available?'disabled':''}>Entry QR · ${money(e.entry_cost)} DGC</button>`:''}${staff?`<button class="primary" data-event-staff>Event desk</button>`:''}${isAdmin?'<button class="secondary" data-edit-event>Edit</button><button class="secondary" data-event-permissions>Permissions</button>':''}</div></article>`;}).join('')||'<div class="empty">No events yet.</div>'}</div></div>`;
   document.querySelector('#new-event')?.addEventListener('click',()=>editEvent());
   async function editEvent(existing){
